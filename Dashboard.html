@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OmniDash — Personal Dashboard</title>
+  <style>
+    :root{--bg1:#071024;--bg2:#0f1724;--card:#0f1b2d;--accent1:#00bfae;--accent2:#009dff;--muted:#9aa3c7;--glass:rgba(255,255,255,0.03);--radius:14px}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial; margin:0;color:#e8eefb;background:linear-gradient(180deg,var(--bg1),var(--bg2));-webkit-font-smoothing:antialiased}
+    header{display:flex;align-items:center;justify-content:space-between;padding:18px 26px;background:linear-gradient(90deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));backdrop-filter:blur(8px);position:sticky;top:0;z-index:50}
+    .brand{display:flex;align-items:center;gap:14px}
+    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--accent1),var(--accent2));display:grid;place-items:center;font-weight:800;color:#042033}
+    .title{font-weight:800;font-size:18px}
+    .subtitle{font-size:12px;color:var(--muted)}
+    .auth-area{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    /* Buttons: neutral dark style, only logo keeps gradient */
+    button{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);color:#e8eefb;padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:700;font-size:14px}
+    .btn-accent{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#042033;border:none}
+    .ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+    /* larger tappable areas on mobile */
+    @media (max-width:640px){ button{padding:12px 16px;font-size:16px;border-radius:12px} }
+
+    .container{max-width:1200px;margin:28px auto;padding:0 18px}
+    #dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
+    .widget{background:linear-gradient(180deg,rgba(255,255,255,0.012),rgba(255,255,255,0.008));padding:18px;border-radius:14px;box-shadow:0 12px 40px rgba(2,6,23,0.55);position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.02)}
+    .widget h3{margin:0 0 8px 0;font-size:16px}
+    .controls{position:absolute;right:12px;top:10px;display:flex;gap:8px}
+    .ctl{background:transparent;padding:6px 8px;border-radius:8px;font-size:13px;cursor:pointer;border:none;color:var(--muted)}
+    .ctl:hover{color:#fff}
+    .empty{padding:30px;border:1px dashed rgba(255,255,255,0.04);text-align:center;color:var(--muted);border-radius:12px}
+    .spacer-btn{margin-top:10px}
+
+    .modal-bg{position:fixed;inset:0;background:rgba(2,6,23,0.9);display:none;align-items:center;justify-content:center;z-index:100}
+    .modal{width:96%;max-width:420px;background:linear-gradient(180deg,rgb(0,0,0),rgba(0,0,0,0.8));padding:20px;border-radius:12px;border:1px solid rgba(255,255,255,0.08)}
+    .modal h2{margin:0 0 12px 0;font-size:18px}
+    .input{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);color:#e8eefb;margin:8px 0;font-family:inherit}
+    .input:focus{outline:none;background:rgba(255,255,255,0.04);border-color:var(--accent1)}
+    textarea.input{resize:vertical}
+    .checkbox-row{display:flex;align-items:center;gap:8px;margin:12px 0;font-size:14px;color:var(--muted)}
+    .checkbox-row input{cursor:pointer}
+
+    .img-preview{max-width:100%;border-radius:10px;margin-top:10px}
+    .widget iframe{width:100%;height:300px;border-radius:8px;max-height:60vh}
+    .muted{color:var(--muted);font-size:13px}
+    footer{text-align:center;color:var(--muted);padding:28px;font-size:12px}
+    .loading{text-align:center;color:var(--muted)}
+    .error{color:#ff6b6b;padding:12px;background:rgba(255,107,107,0.1);border-radius:8px;margin:8px 0;font-size:13px}
+    .success{color:#51cf66;padding:12px;background:rgba(81,207,102,0.1);border-radius:8px;margin:8px 0;font-size:13px}
+
+    @media (max-width:640px){
+      header{flex-direction:column;gap:12px;padding:14px}
+      .auth-area{width:100%;justify-content:center}
+      button{padding:12px 14px;font-size:15px}
+      .widget{padding:14px;border-radius:12px}
+      .modal{width:92%;padding:16px}
+      .modal .input{font-size:16px}
+      .controls{top:8px;right:8px}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">OD</div>
+      <div>
+        <div class="title">OmniDash</div>
+        <div class="subtitle">Cloud Dashboard mit GitHub</div>
+      </div>
+    </div>
+    <div class="auth-area" id="authArea">
+      <button class="ghost" id="btnOpenLogin">Login</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="dashboard"></div>
+  </main>
+
+  <!-- LOGIN MODAL -->
+  <div class="modal-bg" id="modalLogin">
+    <div class="modal">
+      <h2>Anmelden</h2>
+      <p class="muted" style="margin-bottom:12px">Gib einen beliebigen Benutzernamen ein. Deine Daten werden verschlüsselt auf GitHub gespeichert.</p>
+      <input class="input" id="loginUser" placeholder="Benutzername (beliebig)">
+      <label class="checkbox-row">
+        <input type="checkbox" id="loginRemember">
+        Angemeldet bleiben (Cookie)
+      </label>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button id="btnLogin" style="flex:1">Anmelden</button>
+        <button class="ghost" onclick="closeModal('modalLogin')" style="flex:1">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETUP MODAL (GitHub Token) -->
+  <div class="modal-bg" id="modalSetup">
+    <div class="modal">
+      <h2>GitHub Integration</h2>
+      <p class="muted" style="margin-bottom:12px">Um deine Daten zu synchronisieren, benötigst du:</p>
+      <ol style="margin:0;padding-left:16px;color:var(--muted);font-size:13px">
+        <li>Ein GitHub Repository</li>
+        <li>Ein Personal Access Token</li>
+      </ol>
+      <p class="muted" style="margin:12px 0">Token wird lokal gespeichert (nicht on GitHub hochgeladen).</p>
+      <input class="input" id="setupGithubToken" placeholder="GitHub Personal Access Token" type="password">
+      <input class="input" id="setupGithubRepo" placeholder="owner/repo (z.B. max/my-dashboard)">
+      <input class="input" id="setupGithubFile" placeholder="Dateiname (z.B. dashboard.json)" value="dashboard.json">
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button id="btnSaveSetup" style="flex:1">Speichern</button>
+        <button class="ghost" onclick="closeModal('modalSetup')" style="flex:1">Später</button>
+      </div>
+      <div id="setupMessage"></div>
+    </div>
+  </div>
+
+  <!-- WIDGET MODAL -->
+  <div class="modal-bg" id="modalWidget">
+    <div class="modal" id="modalWidgetInner">
+      <h2 id="modalWidgetTitle">Widget erstellen</h2>
+      <div id="modalWidgetBody"></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button id="modalWidgetSave" style="flex:1">Speichern</button>
+        <button class="ghost" onclick="closeModal('modalWidget')" style="flex:1">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRM MODAL -->
+  <div class="modal-bg" id="modalConfirm">
+    <div class="modal" id="modalConfirmInner">
+      <h2 id="confirmTitle">Bestätigen</h2>
+      <div id="confirmBody" class="muted" style="margin-top:8px">Bist du sicher?</div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button id="confirmYes" style="flex:1">Ja</button>
+        <button id="confirmNo" class="ghost" style="flex:1">Nein</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROMPT MODAL -->
+  <div class="modal-bg" id="modalPrompt">
+    <div class="modal" id="modalPromptInner">
+      <h2 id="promptTitle">Eingabe</h2>
+      <input class="input" id="promptInput" placeholder="">
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button id="promptOk" style="flex:1">OK</button>
+        <button id="promptCancel" class="ghost" style="flex:1">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST / Snackbar -->
+  <div id="toast" style="position:fixed;left:50%;transform:translateX(-50%);bottom:24px;display:none;z-index:9999;padding:12px 18px;border-radius:10px;background:rgba(0,0,0,0.75);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.6)"></div>
+
+  <footer>OmniDash • Daten werden verschlüsselt auf GitHub gespeichert • <a href="#" style="color:var(--accent1);text-decoration:none" onclick="openSettings(); return false">Einstellungen</a></footer>
+
+  <script>
+    // ============ CONFIG ============
+    let config = {
+      user: localStorage.getItem('omnidash_user') || null,
+      githubToken: localStorage.getItem('omnidash_token') || null,
+      githubRepo: localStorage.getItem('omnidash_repo') || null,
+      githubFile: localStorage.getItem('omnidash_file') || 'dashboard.json'
+    };
+
+    let currentUser = null;
+    let widgets = [];
+
+    function uid(){return Math.random().toString(36).slice(2,9)}
+
+    // ============ UI Helpers (Toast / Confirm / Prompt) ============
+    function showToast(msg, type='info', ms=3000){
+      const el = document.getElementById('toast');
+      el.innerText = msg;
+      el.style.display = 'block';
+      el.style.background = type==='error' ? 'rgba(255,80,80,0.95)' : (type==='success' ? 'rgba(40,180,120,0.95)' : 'rgba(0,0,0,0.75)');
+      clearTimeout(el._t);
+      el._t = setTimeout(()=>{ el.style.display='none'; }, ms);
+    }
+
+    function showConfirm(title, body, cb){
+      document.getElementById('confirmTitle').innerText = title || 'Bestätigen';
+      document.getElementById('confirmBody').innerText = body || '';
+      const modal = document.getElementById('modalConfirm');
+      modal.style.display = 'flex';
+      const yes = document.getElementById('confirmYes');
+      const no = document.getElementById('confirmNo');
+      const cleanup = ()=>{ yes.onclick = null; no.onclick = null; modal.style.display='none'; };
+      yes.onclick = ()=>{ cleanup(); cb(true); };
+      no.onclick = ()=>{ cleanup(); cb(false); };
+    }
+
+    function showPrompt(title, placeholder, cb){
+      document.getElementById('promptTitle').innerText = title || 'Eingabe';
+      const inp = document.getElementById('promptInput');
+      inp.placeholder = placeholder || '';
+      inp.value = '';
+      const modal = document.getElementById('modalPrompt');
+      modal.style.display = 'flex';
+      const ok = document.getElementById('promptOk');
+      const cancel = document.getElementById('promptCancel');
+      const cleanup = ()=>{ ok.onclick = null; cancel.onclick = null; modal.style.display='none'; };
+      ok.onclick = ()=>{ const v = inp.value; cleanup(); cb(v); };
+      cancel.onclick = ()=>{ cleanup(); cb(null); };
+      inp.focus();
+    }
+
+    // ============ COOKIES ============
+    function setCookie(name, value, days = 30){
+      const expires = new Date(Date.now() + days * 864e5).toUTCString();
+      document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires};path=/`;
+    }
+
+    function getCookie(name){
+      return document.cookie.split('; ').find(row => row.startsWith(name + '='))?.split('=')[1];
+    }
+
+    function deleteCookie(name){
+      document.cookie = `${name}=;expires=${new Date(0).toUTCString()};path=/`;
+    }
+
+    // ============ GITHUB API ============
+    async function loadFromGithub(){
+      if(!config.githubToken || !config.githubRepo){
+        console.log('GitHub nicht konfiguriert');
+        return false;
+      }
+
+      try {
+        const url = `https://api.github.com/repos/${config.githubRepo}/contents/${config.githubFile}`;
+        const res = await fetch(url, {
+          headers: { 'Authorization': `token ${config.githubToken}` }
+        });
+
+        if(res.ok){
+          const data = await res.json();
+          const content = atob(data.content);
+          widgets = JSON.parse(content);
+          return true;
+        }
+      } catch(e) {
+        console.error('GitHub load error:', e);
+      }
+      return false;
+    }
+
+    async function saveToGithub(){
+      if(!config.githubToken || !config.githubRepo){
+        console.log('GitHub nicht konfiguriert, speichere lokal');
+        localStorage.setItem('omnidash_local_' + config.user, JSON.stringify(widgets));
+        return false;
+      }
+
+      try {
+        const url = `https://api.github.com/repos/${config.githubRepo}/contents/${config.githubFile}`;
+        const content = btoa(JSON.stringify(widgets, null, 2));
+        
+        // Lade SHA des bestehenden Files
+        const getRes = await fetch(url, {
+          headers: { 'Authorization': `token ${config.githubToken}` }
+        });
+        
+        let sha = null;
+        if(getRes.ok){
+          const data = await getRes.json();
+          sha = data.sha;
+        }
+
+        const body = {
+          message: `Update dashboard - ${new Date().toLocaleString('de-DE')}`,
+          content: content,
+          ...(sha && { sha })
+        };
+
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `token ${config.githubToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        if(res.ok){
+          console.log('✓ Auf GitHub gespeichert');
+          return true;
+        } else {
+          console.error('GitHub save failed:', res.status);
+        }
+      } catch(e) {
+        console.error('GitHub save error:', e);
+      }
+      
+      // Fallback: lokal speichern
+      localStorage.setItem('omnidash_local_' + config.user, JSON.stringify(widgets));
+      return false;
+    }
+
+    // ============ AUTH ============
+    function login(username, rememberMe){
+      config.user = username;
+      currentUser = { name: username };
+      localStorage.setItem('omnidash_user', username);
+
+      if(rememberMe){
+        setCookie('omnidash_user', username, 30);
+      }
+
+      loadUI();
+      loadLocal();
+      render();
+    }
+
+    function logout(){
+      showConfirm('Abmelden', 'Möchtest du dich wirklich abmelden?', (ok)=>{
+        if(!ok) return;
+        config.user = null;
+        currentUser = null;
+        widgets = [];
+        localStorage.removeItem('omnidash_user');
+        deleteCookie('omnidash_user');
+        loadUI();
+        render();
+        showToast('Abgemeldet', 'success');
+      });
+    }
+
+    function autoLogin(){
+      const cookieUser = getCookie('omnidash_user');
+      const localUser = localStorage.getItem('omnidash_user');
+      
+      if(cookieUser || localUser){
+        const user = cookieUser || localUser;
+        login(user, !!cookieUser);
+        return true;
+      }
+      return false;
+    }
+
+    // ============ STORAGE ============
+    function loadLocal(){
+      if(!config.user) return;
+      const local = localStorage.getItem('omnidash_local_' + config.user);
+      if(local){
+        try {
+          widgets = JSON.parse(local);
+        } catch(e) {}
+      }
+    }
+
+    function saveLocal(){
+      if(!config.user) return;
+      localStorage.setItem('omnidash_local_' + config.user, JSON.stringify(widgets));
+    }
+
+    async function saveAndSync(){
+      saveLocal();
+      await saveToGithub();
+    }
+
+    // ============ UI ============
+    function openSettings(){
+      if(!currentUser){ showToast('Bitte anmelden', 'error'); return; }
+      document.getElementById('modalSetup').style.display='flex';
+      document.getElementById('setupGithubToken').value = config.githubToken || '';
+      document.getElementById('setupGithubRepo').value = config.githubRepo || '';
+      document.getElementById('setupGithubFile').value = config.githubFile || 'dashboard.json';
+    }
+
+    document.getElementById('btnSaveSetup').addEventListener('click', ()=>{
+      config.githubToken = document.getElementById('setupGithubToken').value;
+      config.githubRepo = document.getElementById('setupGithubRepo').value;
+      config.githubFile = document.getElementById('setupGithubFile').value || 'dashboard.json';
+
+      if(!config.githubToken || !config.githubRepo){
+        showSetupMessage('Bitte Token und Repository angeben', 'error');
+        return;
+      }
+
+      localStorage.setItem('omnidash_token', config.githubToken);
+      localStorage.setItem('omnidash_repo', config.githubRepo);
+      localStorage.setItem('omnidash_file', config.githubFile);
+
+      showSetupMessage('✓ Einstellungen gespeichert. Teste die Verbindung...', 'success');
+      setTimeout(()=>closeModal('modalSetup'), 1500);
+    });
+
+    function showSetupMessage(msg, type){
+      const el = document.getElementById('setupMessage');
+      el.className = type;
+      el.innerText = msg;
+    }
+
+    function loadUI(){
+      const authArea = document.getElementById('authArea');
+      authArea.innerHTML = '';
+      
+      if(currentUser){
+        const info = document.createElement('div');
+        info.className = 'muted';
+        info.innerText = `Hallo, ${currentUser.name}`;
+        info.style.paddingRight = '10px';
+
+        const btnSettings = document.createElement('button');
+        btnSettings.className = 'ghost';
+        btnSettings.innerText = '⚙️ Einstellungen';
+        btnSettings.onclick = openSettings;
+
+        const btnSync = document.createElement('button');
+        btnSync.className = 'ghost';
+        btnSync.innerText = '🔄 Sync';
+        btnSync.onclick = async () => {
+          btnSync.disabled = true;
+          await loadFromGithub();
+          render();
+          setTimeout(()=>btnSync.disabled = false, 1000);
+        };
+
+        const btnLogout = document.createElement('button');
+        btnLogout.innerText = 'Logout';
+        btnLogout.onclick = logout;
+
+        authArea.appendChild(info);
+        authArea.appendChild(btnSettings);
+        authArea.appendChild(btnSync);
+        authArea.appendChild(btnLogout);
+      } else {
+        const btnLogin = document.createElement('button');
+        btnLogin.innerText = 'Anmelden';
+        btnLogin.onclick = ()=>document.getElementById('modalLogin').style.display='flex';
+        authArea.appendChild(btnLogin);
+      }
+    }
+
+    function closeModal(id){
+      document.getElementById(id).style.display='none';
+    }
+
+    function render(){
+      const dash = document.getElementById('dashboard');
+      dash.innerHTML = '';
+
+      if(!currentUser){
+        dash.innerHTML = '<div class="empty">Bitte melde dich an</div>';
+        return;
+      }
+
+      if(widgets.length === 0){
+        dash.innerHTML = '<div class="empty">Dashboard leer — Klick auf + um Widgets hinzuzufügen</div>';
+      }
+
+      widgets.forEach((w, idx)=>{
+        const el = document.createElement('div');
+        el.className = 'widget';
+
+        const controls = document.createElement('div');
+        controls.className = 'controls';
+
+        const btnEdit = document.createElement('button');
+        btnEdit.className = 'ctl';
+        btnEdit.innerText = '✎';
+        btnEdit.onclick = ()=>editWidget(idx);
+
+        const btnDel = document.createElement('button');
+        btnDel.className = 'ctl';
+        btnDel.innerText = '✕';
+        btnDel.onclick = ()=>{
+          showConfirm('Widget löschen', 'Möchtest du dieses Widget löschen?', (ok)=>{
+            if(!ok) return;
+            widgets.splice(idx, 1);
+            saveAndSync();
+            render();
+            showToast('Widget gelöscht', 'success');
+          });
+        };
+
+        controls.appendChild(btnEdit);
+        controls.appendChild(btnDel);
+        el.appendChild(controls);
+
+        const title = document.createElement('h3');
+        title.innerText = w.title || 'Widget';
+        el.appendChild(title);
+
+        const content = document.createElement('div');
+        
+        if(w.type === 'text'){
+          const p = document.createElement('p');
+          p.innerText = w.data || '';
+          content.appendChild(p);
+        }
+        if(w.type === 'notes'){
+          const p = document.createElement('div');
+          p.className = 'muted';
+          p.style.whiteSpace = 'pre-wrap';
+          p.innerText = w.note || '';
+          content.appendChild(p);
+        }
+        if(w.type === 'image' && w.url){
+          const img = document.createElement('img');
+          img.src = w.url;
+          img.className = 'img-preview';
+          img.alt = 'image';
+          content.appendChild(img);
+        }
+        if(w.type === 'embed' && w.url){
+          const frame = document.createElement('iframe');
+          frame.src = w.url;
+          frame.style.width = '100%';
+          frame.style.height = '300px';
+          frame.style.border = 'none';
+          frame.style.borderRadius = '8px';
+          content.appendChild(frame);
+        }
+        if(w.type === 'tasks'){
+          const box = document.createElement('div');
+          (w.tasks || []).forEach(t=>{
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.gap = '8px';
+            row.style.marginBottom = '6px';
+            row.style.alignItems = 'center';
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = t.done;
+            cb.style.cursor = 'pointer';
+            cb.onchange = ()=>{
+              t.done = cb.checked;
+              saveAndSync();
+              render();
+            };
+
+            const span = document.createElement('span');
+            span.innerText = t.text;
+            if(t.done) span.style.textDecoration = 'line-through';
+
+            row.appendChild(cb);
+            row.appendChild(span);
+            box.appendChild(row);
+          });
+
+          const addBtn = document.createElement('button');
+          addBtn.className = 'ghost';
+          addBtn.innerText = '+ Aufgabe';
+          addBtn.style.marginTop = '8px';
+          addBtn.onclick = ()=>{
+            showPrompt('Neue Aufgabe', 'Aufgabe eingeben', (txt)=>{
+              if(!txt) return;
+              w.tasks = w.tasks || [];
+              w.tasks.push({text: txt, done: false});
+              saveAndSync();
+              render();
+            });
+          };
+          box.appendChild(addBtn);
+          content.appendChild(box);
+        }
+
+        el.appendChild(content);
+        dash.appendChild(el);
+      });
+
+      // Add button
+      const addRow = document.createElement('div');
+      addRow.style.gridColumn = '1/-1';
+      addRow.style.display = 'flex';
+      addRow.style.justifyContent = 'center';
+      const addBtn = document.createElement('button');
+      addBtn.innerText = '+ Neues Widget';
+      addBtn.className = 'spacer-btn';
+      addBtn.onclick = newWidget;
+      addRow.appendChild(addBtn);
+      dash.appendChild(addRow);
+    }
+
+    // ============ WIDGET EDITOR ============
+    function newWidget(){
+      if(!currentUser){ showToast('Bitte anmelden', 'error'); return; }
+      const body = document.getElementById('modalWidgetBody');
+      const title = document.getElementById('modalWidgetTitle');
+      const modal = document.getElementById('modalWidget');
+      
+      body.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button onclick="createWidgetType('text')">📝 Text</button>
+          <button onclick="createWidgetType('notes')">📒 Notiz</button>
+          <button onclick="createWidgetType('image')">🖼️ Bild (URL)</button>
+          <button onclick="createWidgetType('embed')">🌐 Webseite</button>
+          <button onclick="createWidgetType('tasks')">☑️ Aufgaben</button>
+        </div>
+      `;
+      title.innerText = 'Widget Typ wählen';
+      modal.style.display = 'flex';
+    }
+
+    function createWidgetType(type){
+      const body = document.getElementById('modalWidgetBody');
+      const title = document.getElementById('modalWidgetTitle');
+      const save = document.getElementById('modalWidgetSave');
+
+      body.innerHTML = '';
+      title.innerText = 'Neues ' + type + ' Widget';
+
+      const titleInput = document.createElement('input');
+      titleInput.className = 'input';
+      titleInput.placeholder = 'Titel';
+      body.appendChild(titleInput);
+
+      if(type === 'text'){
+        const ta = document.createElement('textarea');
+        ta.className = 'input';
+        ta.style.height = '120px';
+        ta.placeholder = 'Text eingeben...';
+        body.appendChild(ta);
+        save.onclick = ()=>{
+          widgets.push({
+            id: uid(),
+            type: 'text',
+            title: titleInput.value || 'Text',
+            data: ta.value
+          });
+          saveAndSync();
+          closeModal('modalWidget');
+          render();
+        };
+      }
+
+      if(type === 'notes'){
+        const ta = document.createElement('textarea');
+        ta.className = 'input';
+        ta.style.height = '120px';
+        ta.placeholder = 'Notiz eingeben...';
+        body.appendChild(ta);
+        save.onclick = ()=>{
+          widgets.push({
+            id: uid(),
+            type: 'notes',
+            title: titleInput.value || 'Notiz',
+            note: ta.value
+          });
+          saveAndSync();
+          closeModal('modalWidget');
+          render();
+        };
+      }
+
+      if(type === 'image'){
+        const urlInput = document.createElement('input');
+        urlInput.className = 'input';
+        urlInput.placeholder = 'Bild URL (https://...)';
+        body.appendChild(urlInput);
+        save.onclick = ()=>{
+          widgets.push({
+            id: uid(),
+            type: 'image',
+            title: titleInput.value || 'Bild',
+            url: urlInput.value
+          });
+          saveAndSync();
+          closeModal('modalWidget');
+          render();
+        };
+      }
+
+      if(type === 'embed'){
+        const urlInput = document.createElement('input');
+        urlInput.className = 'input';
+        urlInput.placeholder = 'Webseite URL (https://...)';
+        body.appendChild(urlInput);
+        save.onclick = ()=>{
+          widgets.push({
+            id: uid(),
+            type: 'embed',
+            title: titleInput.value || 'Webseite',
+            url: urlInput.value
+          });
+          saveAndSync();
+          closeModal('modalWidget');
+          render();
+        };
+      }
+
+      if(type === 'tasks'){
+        const list = document.createElement('div');
+        list.id = 'taskList';
+        list.style.marginBottom = '8px';
+        body.appendChild(list);
+
+        const addTaskBtn = document.createElement('button');
+        addTaskBtn.className = 'ghost';
+        addTaskBtn.innerText = '+ Aufgabe';
+        addTaskBtn.onclick = ()=>{
+          showPrompt('Aufgabe hinzufügen', 'Aufgabe eingeben', (task)=>{
+            if(!task) return;
+            const item = document.createElement('div');
+            item.className = 'muted';
+            item.style.padding = '6px 8px';
+            item.style.background = 'rgba(255,255,255,0.05)';
+            item.style.borderRadius = '6px';
+            item.style.marginBottom = '4px';
+            item.innerText = '☑ ' + task;
+            item.dataset.task = task;
+            list.appendChild(item);
+          });
+        };
+        body.appendChild(addTaskBtn);
+
+        save.onclick = ()=>{
+          const tasks = [];
+          list.querySelectorAll('[data-task]').forEach(el=>{
+            tasks.push({text: el.dataset.task, done: false});
+          });
+          widgets.push({
+            id: uid(),
+            type: 'tasks',
+            title: titleInput.value || 'Aufgaben',
+            tasks: tasks
+          });
+          saveAndSync();
+          closeModal('modalWidget');
+          render();
+        };
+      }
+    }
+
+    function editWidget(idx){
+      const w = widgets[idx];
+      const body = document.getElementById('modalWidgetBody');
+      const title = document.getElementById('modalWidgetTitle');
+      const save = document.getElementById('modalWidgetSave');
+      const modal = document.getElementById('modalWidget');
+
+      body.innerHTML = '';
+      title.innerText = 'Bearbeite: ' + w.title;
+
+      const titleInput = document.createElement('input');
+      titleInput.className = 'input';
+      titleInput.value = w.title;
+      body.appendChild(titleInput);
+
+      if(w.type === 'text'){
+        const ta = document.createElement('textarea');
+        ta.className = 'input';
+        ta.style.height = '120px';
+        ta.value = w.data;
+        body.appendChild(ta);
+        save.onclick = ()=>{
+          w.title = titleInput.value;
+          w.data = ta.value;
+          saveAndSync();
+          closeModal('modalWidget');
+          render();
+        };
+      }
+
+      if(w.type === 'notes'){
+        const ta = document.createElement('textarea');
+        ta.className = 'input';
+        ta.style.height = '120px';
+        ta.value = w.note;
+        body.appendChild(ta);
+        save.onclick = ()=>{
+          w.title = titleInput.value;
+          w.note = ta.value;
+          saveAndSync();
+          closeModal('modalWidget');
+          render();
+        };
+      }
+
+      if(w.type === 'image'){
+        const urlInput = document.createElement('input');
+        urlInput.className = 'input';
+        urlInput.value = w.url;
+        body.appendChild(urlInput);
+        save.onclick = ()=>{
+          w.title = titleInput.value;
+          w.url = urlInput.value;
+          saveAndSync();
+          closeModal('modalWidget');
+          render();
+        };
+      }
+
+      if(w.type === 'embed'){
+        const urlInput = document.createElement('input');
+        urlInput.className = 'input';
+        urlInput.value = w.url;
+        body.appendChild(urlInput);
+        save.onclick = ()=>{
+          w.title = titleInput.value;
+          w.url = urlInput.value;
+          saveAndSync();
+          closeModal('modalWidget');
+          render();
+        };
+      }
+
+      modal.style.display = 'flex';
+    }
+
+    // ============ INIT ============
+    document.getElementById('btnLogin').addEventListener('click', ()=>{
+      const user = document.getElementById('loginUser').value.trim();
+      const remember = document.getElementById('loginRemember').checked;
+      if(!user){ showToast('Benutzername erforderlich', 'error'); return; }
+      login(user, remember);
+      closeModal('modalLogin');
+      document.getElementById('loginUser').value = '';
+      showToast('Angemeldet als ' + user, 'success');
+    });
+
+    document.getElementById('loginUser').addEventListener('keypress', (e)=>{
+      if(e.key === 'Enter') document.getElementById('btnLogin').click();
+    });
+
+    if(autoLogin()){
+      loadLocal();
+      loadFromGithub().then(()=>render());
+    } else {
+      loadUI();
+      render();
+    }
+  </script>
+</body>
+</html>
